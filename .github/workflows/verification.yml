@@ -1,0 +1,46 @@
+name: Verification iOS
+# Compile à chaque envoi de code et publie le journal (branche ci-ios) pour que Claude puisse corriger les erreurs.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Choisir Xcode 26
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1); [ -n "$X" ] || X=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$X"; xcodebuild -version | tee ci.log
+      - name: Compiler pour le simulateur (sans signature)
+        run: |
+          set -o pipefail
+          xcodebuild -project Planif.xcodeproj -scheme Planif -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$PWD/dd" CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            && echo "RESULTAT: OK" >> ci.log || { echo "RESULTAT: ECHEC" >> ci.log; grep -E "error:" build.log | sort -u | head -80 >> ci.log; tail -40 build.log >> ci.log; exit 1; }
+          grep -E "warning:" build.log | sort -u | head -40 >> ci.log || true
+      - name: Lancer dans le simulateur et prendre une capture
+        continue-on-error: true
+        run: |
+          APP=$(find dd/Build/Products -name Planif.app -maxdepth 3 | head -1)
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print([x['udid'] for k,v in d.items() if 'iOS-26' in k for x in v if 'iPhone' in x['name']][-1])")
+          xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch --console-pty "$UDID" ca.tomtommusic.planif > run.log 2>&1 &
+          sleep 15
+          xcrun simctl io "$UDID" screenshot shot.png
+          echo "--- console ---" >> ci.log; head -60 run.log >> ci.log
+      - name: Publier le journal
+        if: always()
+        run: |
+          [ -f ci.log ] || echo "pas de journal" > ci.log
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          cp ci.log /tmp/ci.log; [ -f shot.png ] && cp shot.png /tmp/shot.png
+          git checkout --orphan ci-ios && git rm -rfq . && cp /tmp/ci.log ci-ios.log
+          git add ci-ios.log; [ -f /tmp/shot.png ] && cp /tmp/shot.png shot.png && git add -f shot.png
+          git commit -qm "journal ${GITHUB_SHA}" && git push -f origin ci-ios

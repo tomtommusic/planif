@@ -1,0 +1,107 @@
+name: TestFlight
+# Lancement manuel : onglet Actions > TestFlight > Run workflow.
+# Secrets requis (Settings > Secrets and variables > Actions) :
+#   APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (contenu complet du fichier AuthKey_XXXX.p8)
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Numéro de version affiché (vide = celui du projet)"
+        required: false
+        default: ""
+      signature:
+        description: "Archive : adhoc (garde les droits App Group) ou aucune"
+        required: false
+        default: adhoc
+        type: choice
+        options: [adhoc, aucune]
+      runner:
+        description: "Mac de GitHub (changer si l'envoi reste en file d'attente)"
+        required: false
+        default: macos-15
+        type: choice
+        options: [macos-15, macos-15-intel, macos-26]
+permissions:
+  contents: write
+jobs:
+  upload:
+    runs-on: ${{ github.event.inputs.runner || 'macos-15' }}
+    timeout-minutes: 60
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Choisir Xcode 26
+        run: |
+          X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1); [ -n "$X" ] || X=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          [ -n "$X" ] || { echo "::error::Xcode 26 absent de ce Mac ; choisir macos-26"; exit 1; }
+          sudo xcode-select -s "$X"; xcodebuild -version | tee tf.log
+      - name: Vérifier les secrets
+        run: |
+          ok=1; for v in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do [ -n "${!v}" ] || { echo "::error::Secret manquant : $v"; echo "Secret manquant : $v" >> tf.log; ok=0; }; done; [ $ok = 1 ]
+      - name: Installer la clé API (temporaire)
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"; KEY="$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY"; chmod 600 "$KEY"; echo "KEY=$KEY" >> "$GITHUB_ENV"
+      - name: Archiver
+        run: |
+          set -o pipefail
+          if [ "${{ github.event.inputs.signature }}" = aucune ]; then
+            SIGN='CODE_SIGN_STYLE=Automatic CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='
+          else
+            # Signature ad hoc qui porte les droits (App Group) ; la vraie signature se fait à l'envoi.
+            SIGN='CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES'
+          fi
+          V="${{ github.event.inputs.version }}"; EXTRA=""; [ -n "$V" ] && EXTRA="MARKETING_VERSION=$V"
+          xcodebuild -project Planif.xcodeproj -scheme Planif -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Planif.xcarchive" \
+            -allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" $SIGN CURRENT_PROJECT_VERSION="${{ github.run_number }}" $EXTRA \
+            archive > archive.log 2>&1 || { grep -E "error:|error -|No Account|No profiles|Provisioning|requires a provisioning|Signing" archive.log | sort -u | head -25 | tee -a tf.log | while IFS= read -r l; do echo "::error::$l"; done; tail -40 archive.log >> tf.log; exit 1; }
+          echo "ARCHIVE: OK" >> tf.log
+      - name: Envoyer à App Store Connect (TestFlight)
+        run: |
+          set -o pipefail
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Planif.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -exportPath "$RUNNER_TEMP/out" -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" > export.log 2>&1 || { grep -E "error|Error|ERROR" export.log | sort -u | head -25 | tee -a tf.log | while IFS= read -r l; do echo "::error::$l"; done; tail -40 export.log >> tf.log; exit 1; }
+          echo "EXPORT: OK" >> tf.log
+          # Vérifier que l'app et le widget portent bien le groupe d'apps (sinon le widget ne verrait pas les données)
+          IPA=$(ls "$RUNNER_TEMP/out"/*.ipa | head -1); rm -rf "$RUNNER_TEMP/x"; mkdir "$RUNNER_TEMP/x"; unzip -q "$IPA" -d "$RUNNER_TEMP/x"
+          for B in "$RUNNER_TEMP/x/Payload/Planif.app" "$RUNNER_TEMP/x/Payload/Planif.app/PlugIns/PlanifWidgetExtension.appex"; do
+            echo "--- droits de $(basename "$B") ---" >> tf.log
+            codesign -d --entitlements - --xml "$B" 2>/dev/null | plutil -convert xml1 -o - - 2>/dev/null >> tf.log || codesign -d --entitlements - "$B" >> tf.log 2>&1
+          done
+          grep -q "group.ca.tomtommusic.planif" tf.log || { echo "::error::Le groupe d'apps est absent de la signature : relancer avec une autre option de signature"; echo "DROITS: GROUPE ABSENT" >> tf.log; exit 1; }
+          echo "DROITS: OK" >> tf.log
+          xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" > upload.log 2>&1 \
+            || { grep -iE "error|fail" upload.log | head -20 | tee -a tf.log | while IFS= read -r l; do echo "::error::$l"; done; tail -30 upload.log >> tf.log; exit 1; }
+          tail -5 upload.log >> tf.log
+          echo "ENVOI: OK — build ${{ github.run_number }}. Elle apparaîtra dans TestFlight après le traitement par Apple (10 à 30 min)." | tee -a tf.log
+        env:
+          API_PRIVATE_KEYS_DIR: ${{ runner.temp }}/keys
+      - name: Effacer la clé
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
+      - name: Publier le journal
+        if: always()
+        run: |
+          [ -f tf.log ] || echo "pas de journal" > tf.log
+          cp tf.log /tmp/tf.log
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git checkout --orphan ci-testflight && git rm -rfq . && cp /tmp/tf.log ci-testflight.log
+          git add ci-testflight.log && git commit -qm "testflight ${{ github.run_number }}" && git push -f origin ci-testflight
