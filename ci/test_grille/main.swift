@@ -4,6 +4,7 @@ import PDFKit
 // Test hors app : lit le calendrier scolaire de démonstration avec le même code que l'app.
 let chemin = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "ci/fixtures/calendrier-sommets-2026-2027.pdf"
 guard let doc = PDFDocument(url: URL(fileURLWithPath: chemin)) else { print("PDF illisible"); exit(1) }
+GrilleCalendrier.journal = { print("  · " + $0) }
 var g = ResultatGrille()
 for i in 0..<doc.pageCount { if let p = doc.page(at: i) { g.fusionner(GrilleCalendrier.analyser(p)) } }
 print("jours de cycle :", g.cycle.count, "du", g.premier ?? "-", "au", g.dernier ?? "-")

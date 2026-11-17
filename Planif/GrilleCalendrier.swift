@@ -34,6 +34,9 @@ enum GrilleCalendrier {
         let x0: CGFloat, x1: CGFloat, top: CGFloat, bottom: CGFloat
     }
 
+    /// Pour les tests : reçoit des détails sur la lecture.
+    static var journal: ((String) -> Void)? = nil
+
     static let mois: [String: Int] = [
         "JANVIER": 1, "FÉVRIER": 2, "FEVRIER": 2, "MARS": 3, "AVRIL": 4, "MAI": 5, "JUIN": 6, "JUILLET": 7,
         "AOÛT": 8, "AOUT": 8, "SEPTEMBRE": 9, "OCTOBRE": 10, "NOVEMBRE": 11, "DÉCEMBRE": 12, "DECEMBRE": 12
@@ -96,12 +99,16 @@ enum GrilleCalendrier {
             entetes.append(Entete(m: mo, y: an, x0: x0, x1: x1, top: top, bottom: bottom))
         }
         let candidats = jetons.filter { (Int($0.t) ?? 0) >= 1 && (Int($0.t) ?? 0) <= 31 }
+        journal?("caractères \(ns.length), chiffres \(chiffres.count), nombres \(jetons.count), en-têtes \(entetes.count), candidats \(candidats.count)")
+        journal?("exemples : " + jetons.prefix(12).map { "\($0.t)@(\(Int($0.x0)),\(Int($0.top)) h\(Int($0.h)))" }.joined(separator: " "))
+        journal?("en-têtes : " + entetes.map { "\($0.m)/\($0.y)@(\(Int($0.x0)),\(Int($0.top)))" }.joined(separator: " "))
         guard entetes.count >= 2, candidats.count >= 28 else { return res }
 
         let hauteurs = candidats.map { $0.h }.sorted()
         let H = hauteurs[hauteurs.count / 2]
         var grands = candidats.filter { $0.h >= 0.8 * H }
         let petits = jetons.filter { $0.h < 0.75 * H && $0.t.count == 1 && $0.t != "0" }
+        journal?("H \(H), grands \(grands.count), petits \(petits.count)")
 
         // Largeur d'une colonne de mois
         let centres = entetes.map { ($0.x0 + $0.x1) / 2 }.sorted()
@@ -140,6 +147,7 @@ enum GrilleCalendrier {
             }
             if let m = meilleur, let v = Int(p.t) { res.cycle[m.1] = v }
         }
+        journal?("dates \(parDate.count), jours de cycle \(res.cycle.count)")
         guard res.cycle.count >= 10, let premier = res.premier, let dernier = res.dernier else { return ResultatGrille() }
 
         // 5. Jours de semaine sans jour de cycle : pas d'école. La couleur de la case dit pédago ou congé.
