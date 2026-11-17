@@ -53,12 +53,18 @@ enum GrilleCalendrier {
             (r.minX - box.minX, r.maxX - box.minX, box.maxY - r.maxY, box.maxY - r.minY)
         }
 
+        // Position d'un caractère (via une sélection : même numérotation que page.string)
+        func boite(_ i: Int) -> CGRect {
+            guard let sel = page.selection(for: NSRange(location: i, length: 1)) else { return .zero }
+            return sel.bounds(for: page)
+        }
+
         // 1. Chiffres avec leur position, regroupés en nombres
         var chiffres: [Jeton] = []
         for i in 0..<ns.length {
             let c = ns.character(at: i)
             guard c >= 48 && c <= 57 else { continue }
-            let r = page.characterBounds(at: i)
+            let r = boite(i)
             guard r.width > 0, r.height > 0 else { continue }
             let (x0, x1, top, bottom) = conv(r)
             chiffres.append(Jeton(t: String(Character(UnicodeScalar(UInt8(c)))), x0: x0, x1: x1, top: top, bottom: bottom))
@@ -88,7 +94,7 @@ enum GrilleCalendrier {
             var x0 = CGFloat.greatestFiniteMagnitude, x1 = -CGFloat.greatestFiniteMagnitude
             var top = CGFloat.greatestFiniteMagnitude, bottom = -CGFloat.greatestFiniteMagnitude
             for i in m.range.location..<(m.range.location + m.range.length) {
-                let r = page.characterBounds(at: i)
+                let r = boite(i)
                 guard r.width > 0, r.height > 0 else { continue }
                 let v = conv(r)
                 x0 = min(x0, v.0); x1 = max(x1, v.1); top = min(top, v.2); bottom = max(bottom, v.3)
