@@ -1,18 +1,59 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
+
+// MARK: - Navigation entre les jours (revient seule à aujourd'hui)
+
+enum NavWidget {
+    /// Délai avant le retour automatique à aujourd'hui.
+    static let duree: TimeInterval = 120
+    private static var defauts: UserDefaults? { UserDefaults(suiteName: Stockage.groupeApp) }
+
+    static func etat(_ maintenant: Date = .now) -> (decalage: Int, expire: Date?) {
+        guard let d = defauts else { return (0, nil) }
+        let exp = Date(timeIntervalSince1970: d.double(forKey: "widgetExpire"))
+        let dec = d.integer(forKey: "widgetDecalage")
+        guard dec != 0, exp > maintenant else { return (0, nil) }
+        return (dec, exp)
+    }
+
+    static func regler(_ decalage: Int) {
+        guard let d = defauts else { return }
+        d.set(decalage, forKey: "widgetDecalage")
+        d.set(decalage == 0 ? 0 : Date.now.addingTimeInterval(duree).timeIntervalSince1970, forKey: "widgetExpire")
+    }
+}
+
+struct ChangerJourWidget: AppIntent {
+    static var title: LocalizedStringResource = "Changer le jour affiché"
+    static var isDiscoverable: Bool = false
+
+    /// +1 : jour suivant, -1 : jour précédent, 0 : retour à aujourd'hui.
+    @Parameter(title: "Sens") var sens: Int
+
+    init() { sens = 0 }
+    init(sens: Int) { self.sens = sens }
+
+    func perform() async throws -> some IntentResult {
+        let actuel = NavWidget.etat().decalage
+        NavWidget.regler(sens == 0 ? 0 : max(-14, min(60, actuel + sens)))
+        return .result()
+    }
+}
 
 // MARK: - Données du widget
 
 struct EntreePlanif: TimelineEntry {
     let date: Date
     let data: AppData?
+    var decalage: Int = 0
 }
 
 struct FournisseurPlanif: TimelineProvider {
     func placeholder(in context: Context) -> EntreePlanif { EntreePlanif(date: .now, data: nil) }
 
     func getSnapshot(in context: Context, completion: @escaping (EntreePlanif) -> Void) {
-        completion(EntreePlanif(date: .now, data: Stockage.charger()))
+        completion(EntreePlanif(date: .now, data: Stockage.charger(), decalage: NavWidget.etat().decalage))
     }
 
     /// Une entrée au début et à la fin de chaque période, plus toutes les 10 minutes pour la barre de progression.
@@ -31,8 +72,12 @@ struct FournisseurPlanif: TimelineProvider {
             }
         }
         for i in 1...48 { dates.insert(maintenant.addingTimeInterval(Double(i) * 600)) }
+        let nav = NavWidget.etat(maintenant)
+        if let exp = nav.expire { dates.insert(exp) }
         let limite = maintenant.addingTimeInterval(8 * 3600)
-        let entrees = dates.filter { $0 >= maintenant && $0 <= limite }.sorted().map { EntreePlanif(date: $0, data: data) }
+        let entrees = dates.filter { $0 >= maintenant && $0 <= limite }.sorted().map { t in
+            EntreePlanif(date: t, data: data, decalage: (nav.expire.map { t < $0 } ?? false) ? nav.decalage : 0)
+        }
         completion(Timeline(entries: entrees, policy: .after(limite)))
     }
 }
@@ -75,8 +120,10 @@ struct VuePlanifWidget: View {
     }
 
     @ViewBuilder private func contenu(_ m: Moteur) -> some View {
-        let jour = D.iso(entree.date)
-        let h = D.hhmm(entree.date)
+        let dec = entree.decalage
+        let jour = D.add(D.iso(entree.date), dec)
+        // Autre jour : rien « en cours », on montre la journée depuis le début.
+        let h = dec == 0 ? D.hhmm(entree.date) : "00:00"
         let tous = m.items(jour).filter { !$0.debut.isEmpty }
         let actifs = tous.filter { $0.type != .libre }
         let cur = actifs.first { $0.debut <= h && h < $0.fin }
@@ -85,26 +132,20 @@ struct VuePlanifWidget: View {
         let cd = m.jourCycle(jour)
 
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Label(famille == .systemLarge ? D.court(jour) : "Planif", systemImage: "calendar")
-                Spacer()
-                Text(cd.map { m.etiquetteJour($0) } ?? "—")
-            }
-            .font(.caption2.bold())
-            .foregroundStyle(.secondary)
+            entete(m, jour: jour, cd: cd, dec: dec)
 
             switch famille {
             case .systemSmall:
-                bloc(focus, enCours: cur != nil, m: m, jour: jour, h: h, cd: cd)
+                bloc(focus, enCours: cur != nil, m: m, jour: jour, h: h, cd: cd, dec: dec)
             case .systemMedium:
                 HStack(alignment: .top, spacing: 12) {
-                    bloc(focus, enCours: cur != nil, m: m, jour: jour, h: h, cd: cd)
+                    bloc(focus, enCours: cur != nil, m: m, jour: jour, h: h, cd: cd, dec: dec)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Divider()
                     VStack(alignment: .leading, spacing: 5) {
                         Text("ENSUITE").font(.caption2.weight(.heavy)).foregroundStyle(.secondary)
                         let reste = suivants.filter { $0.id != focus?.id }.prefix(3)
-                        if reste.isEmpty { Text("Rien d’autre aujourd’hui").font(.caption).foregroundStyle(.secondary) }
+                        if reste.isEmpty { Text(dec == 0 ? "Rien d’autre aujourd’hui" : "Rien d’autre ce jour-là").font(.caption).foregroundStyle(.secondary) }
                         ForEach(Array(reste)) { x in
                             HStack(spacing: 6) {
                                 Text(D.hm(x.debut)).font(.caption.bold().monospacedDigit())
@@ -141,10 +182,45 @@ struct VuePlanifWidget: View {
         }
     }
 
-    @ViewBuilder private func bloc(_ x: ItemJour?, enCours: Bool, m: Moteur, jour: String, h: String, cd: Int?) -> some View {
+    /// En-tête : ‹ jour › — les flèches changent de jour, le titre ramène à aujourd'hui.
+    @ViewBuilder private func entete(_ m: Moteur, jour: String, cd: Int?, dec: Int) -> some View {
+        let etiquette = cd.map { m.etiquetteJour($0) } ?? "—"
+        HStack(spacing: 4) {
+            Button(intent: ChangerJourWidget(sens: -1)) {
+                Image(systemName: "chevron.left").frame(width: 22, height: 20).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button(intent: ChangerJourWidget(sens: 0)) {
+                HStack(spacing: 4) {
+                    Text(nomJour(jour, dec)).lineLimit(1).minimumScaleFactor(0.7)
+                    if famille != .systemSmall || dec == 0 { Text("· " + etiquette).lineLimit(1) }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button(intent: ChangerJourWidget(sens: 1)) {
+                Image(systemName: "chevron.right").frame(width: 22, height: 20).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .font(.caption2.bold())
+        .foregroundStyle(dec == 0 ? Color.secondary : Color.primary)
+    }
+
+    private func nomJour(_ jour: String, _ dec: Int) -> String {
+        switch dec {
+        case 0: return famille == .systemLarge ? "Aujourd’hui · " + D.court(jour) : "Aujourd’hui"
+        case 1: return famille == .systemSmall ? "Demain" : "Demain · " + D.court(jour)
+        case -1: return famille == .systemSmall ? "Hier" : "Hier · " + D.court(jour)
+        default: return D.court(jour)
+        }
+    }
+
+    @ViewBuilder private func bloc(_ x: ItemJour?, enCours: Bool, m: Moteur, jour: String, h: String, cd: Int?, dec: Int) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             if let x {
-                Text(enCours ? "EN CE MOMENT" : "PROCHAIN · \(D.hm(x.debut))").font(.caption2.weight(.heavy)).foregroundStyle(.secondary)
+                Text(enCours ? "EN CE MOMENT" : (dec == 0 ? "PROCHAIN" : "PREMIER") + " · \(D.hm(x.debut))").font(.caption2.weight(.heavy)).foregroundStyle(.secondary)
                 HStack(spacing: 6) {
                     bande(x).frame(width: 5, height: 20)
                     Text(nom(x)).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
@@ -160,13 +236,11 @@ struct VuePlanifWidget: View {
                     Text("Local " + x.local).font(.caption2).foregroundStyle(.secondary)
                 }
             } else if cd == nil {
-                Text("AUJOURD’HUI").font(.caption2.weight(.heavy)).foregroundStyle(.secondary)
                 Text("Pas d’école").font(.title3.bold())
                 if let n = m.prochainJourEcole(apres: jour) { Text("Retour " + D.court(n).lowercased()).font(.caption) }
                 Spacer(minLength: 0)
             } else {
-                Text("AUJOURD’HUI").font(.caption2.weight(.heavy)).foregroundStyle(.secondary)
-                Text("Journée terminée").font(.title3.bold())
+                Text(dec == 0 ? "Journée terminée" : "Rien à l’horaire").font(.title3.bold())
                 Spacer(minLength: 0)
             }
         }
