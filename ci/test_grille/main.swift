@@ -10,6 +10,18 @@ for i in 0..<doc.pageCount { if let p = doc.page(at: i) { g.fusionner(GrilleCale
 print("jours de cycle :", g.cycle.count, "du", g.premier ?? "-", "au", g.dernier ?? "-")
 print("pédagos :", g.nbPedago, " congés :", g.nbConge, " reprises :", g.reprises.sorted())
 for d in g.sansEcole.keys.sorted() { print("  sans école", d, g.sansEcole[d]!.rawValue) }
+if let a = g.premier, let z = g.dernier {
+    var x = a; var prec: Int? = nil
+    while x <= z {
+        let wd = D.weekday(x)
+        if let j = g.cycle[x] {
+            if wd == 0 || wd == 6 { print("  fin de semaine avec cycle", x, j) }
+            if let p = prec, j != p % 9 + 1 { print("  saut", x, p, "→", j) }
+            prec = j
+        } else if wd >= 1 && wd <= 5 && g.sansEcole[x] == nil { print("  jour sans info", x) }
+        x = D.add(x, 1)
+    }
+}
 var ok = true
 func verifier(_ d: String, _ j: Int) { if g.cycle[d] != j { print("ÉCHEC", d, "attendu", j, "obtenu", g.cycle[d] as Any); ok = false } }
 verifier("2026-08-25", 1); verifier("2026-08-26", 2); verifier("2026-09-08", 1); verifier("2026-11-17", 2); verifier("2027-06-21", 9)

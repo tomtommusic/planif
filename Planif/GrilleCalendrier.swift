@@ -161,7 +161,7 @@ enum GrilleCalendrier {
         for (date, j) in parDate {
             let wd = D.weekday(date)
             guard wd >= 1 && wd <= 5, res.cycle[date] == nil else { continue }
-            let couleur = image?.classer(x0: j.x0 - 0.5 * j.h, x1: j.x1 + 0.5 * j.h, top: j.top - 0.2 * j.h, bottom: j.bottom + 0.2 * j.h)
+            let couleur = image?.classer(x0: j.x0 - 0.35 * j.h, x1: j.x1 + 0.35 * j.h, top: j.top + 0.1 * j.h, bottom: j.bottom - 0.1 * j.h)
             let dansAnnee = date > premier && date < dernier
             switch couleur {
             case "pedago": res.sansEcole[date] = .pedago
