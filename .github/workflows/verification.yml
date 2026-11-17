@@ -26,7 +26,7 @@ jobs:
           grep -E "warning:" build.log | sort -u | head -40 >> ci.log || true
       - name: Tester la lecture d'un calendrier en grille
         run: |
-          set -o pipefail
+          set +e
           xcrun swiftc -O Shared/Model.swift Shared/Moteur.swift Planif/GrilleCalendrier.swift ci/test_grille/main.swift -o /tmp/test_grille > tg.log 2>&1 && /tmp/test_grille >> tg.log 2>&1; r=$?
           echo "--- test grille ---" >> ci.log; cat tg.log >> ci.log; exit $r
       - name: Lancer dans le simulateur et prendre une capture
