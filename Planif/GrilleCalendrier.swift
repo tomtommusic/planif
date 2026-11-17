@@ -77,7 +77,7 @@ enum GrilleCalendrier {
         for c in chiffres {
             if var cur = jetons.last {
                 let ecart = c.x0 - cur.x1
-                if abs(c.h - cur.h) < 0.25 * cur.h && abs(c.bottom - cur.bottom) < 0.3 * c.h && ecart >= -0.4 * c.h && ecart < 0.45 * c.h {
+                if abs(c.h - cur.h) < 0.25 * cur.h && abs(c.bottom - cur.bottom) < 0.3 * c.h && ecart >= -0.4 * c.h && ecart < 0.25 * c.h {
                     cur.t += c.t
                     cur.x1 = c.x1
                     jetons[jetons.count - 1] = cur
@@ -110,10 +110,6 @@ enum GrilleCalendrier {
         journal?("en-têtes : " + entetes.map { "\($0.m)/\($0.y)@(\(Int($0.x0)),\(Int($0.top)))" }.joined(separator: " "))
         guard entetes.count >= 2, candidats.count >= 28 else { return res }
 
-        if journal != nil {
-            journal?("zone avril : " + chiffres.filter { $0.x0 > 185 && $0.x0 < 300 && $0.top > 495 && $0.top < 530 }.map { "\($0.t)@(\(String(format: "%.1f,%.1f-%.1f,%.1f", $0.x0, $0.x1, $0.top, $0.bottom)))" }.joined(separator: " "))
-            journal?("jetons avril : " + jetons.filter { $0.x0 > 185 && $0.x0 < 300 && $0.top > 495 && $0.top < 530 }.map { "\($0.t)@(\(String(format: "%.1f,%.1f-%.1f,%.1f", $0.x0, $0.x1, $0.top, $0.bottom)))" }.joined(separator: " "))
-        }
         let hauteurs = candidats.map { $0.h }.sorted()
         let H = hauteurs[hauteurs.count / 2]
         var grands = candidats.filter { $0.h >= 0.8 * H }
