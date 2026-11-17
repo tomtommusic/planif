@@ -50,7 +50,8 @@ jobs:
         if: ${{ github.event.inputs.signature != 'aucune' }}
         run: |
           python3 -m pip install --quiet --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install --quiet pyjwt cryptography
-          python3 ci/signature.py preparer 2>&1 | tee -a tf.log
+          set -o pipefail
+          python3 ci/signature.py preparer 2>&1 | grep -v -E "^ +0x|^attributes:|^version:|^class:|^keychain:" | tee -a tf.log
       - name: Archiver
         run: |
           set -o pipefail
