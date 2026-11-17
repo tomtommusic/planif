@@ -241,7 +241,27 @@ final class Moteur {
 
     func evenements(_ date: String) -> [Evenement] {
         let cd = jourCycle(date)
-        return d.evenements.filter { evenementLe($0, date, cd) }
+        return d.evenements.filter { evenementLe($0, date, cd) } + blocsLe(date, cd)
+    }
+
+    /// Occurrences des horaires réguliers (pratiques, soirées…) pour une date.
+    func blocsLe(_ date: String, _ cd: Int?, avecAnnules: Bool = false) -> [Evenement] {
+        var out: [Evenement] = []
+        for h in d.horaires {
+            guard date >= h.debut, h.fin.isEmpty || date <= h.fin else { continue }
+            if h.rec == .cycle && cd == nil { continue }
+            if h.rec == .hebdo && h.ecoleSeulement && cd == nil { continue }
+            let cle = h.rec == .cycle ? (cd ?? 0) : D.weekday(date)
+            for b in h.blocs where b.jours.contains(cle) {
+                let annule = h.exceptions.contains(b.id + "|" + date)
+                if annule && !avecAnnules { continue }
+                out.append(Evenement(id: "h|\(b.id)|\(date)", titre: b.titre, type: .rdv, date: date,
+                                     journee: false, debut: b.debut, fin: b.fin, lieu: b.lieu,
+                                     note: h.nom, annuleCours: false, exceptions: annule ? [date] : [],
+                                     horaireId: h.id, blocId: b.id))
+            }
+        }
+        return out
     }
 
     func coursAnnulesLe(_ date: String) -> Bool {

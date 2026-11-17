@@ -91,6 +91,31 @@ struct Evenement: Codable, Identifiable, Hashable {
     var ecoleSeulement: Bool = true
     var annuleCours: Bool = false
     var exceptions: [String] = []
+    /// Rempli seulement pour les occurrences générées par un horaire régulier (jamais enregistré).
+    var horaireId: String? = nil
+    var blocId: String? = nil
+}
+
+// MARK: - Horaires réguliers (pratiques, soirées…) jumelés à l'horaire de cours
+
+struct BlocHoraire: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    var titre: String
+    var jours: [Int] = []          // 0 = dimanche … 6 = samedi, ou numéros de jour de cycle
+    var debut: String = "18:30"
+    var fin: String = "20:00"
+    var lieu: String = ""
+}
+
+struct HoraireSup: Codable, Identifiable, Hashable {
+    var id: String = UUID().uuidString
+    var nom: String
+    var rec: Recurrence = .hebdo   // .hebdo ou .cycle
+    var ecoleSeulement: Bool = true
+    var debut: String
+    var fin: String
+    var blocs: [BlocHoraire] = []
+    var exceptions: [String] = []  // « idBloc|date » : occurrences annulées
 }
 
 struct Etape: Codable, Identifiable, Hashable {
@@ -135,6 +160,12 @@ struct AppData: Codable {
     var activites: [Activite]
     var annulations: [String]           // clés "idGroupe|date|idPeriode"
     var notes: [String: String]         // même clé
+    var horairesSup: [HoraireSup]? = nil
+
+    var horaires: [HoraireSup] {
+        get { horairesSup ?? [] }
+        set { horairesSup = newValue }
+    }
 
     static func vide() -> AppData {
         let cal = Calendar(identifier: .gregorian)

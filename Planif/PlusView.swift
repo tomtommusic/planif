@@ -5,6 +5,7 @@ struct PlusView: View {
         NavigationStack {
             List {
                 NavigationLink { GrilleView() } label: { Label("Horaire (grille du cycle)", systemImage: "square.grid.3x3") }
+                NavigationLink { HorairesView() } label: { Label("Horaires réguliers (pratiques, soirées…)", systemImage: "repeat") }
                 NavigationLink { EvenementsView() } label: { Label("Événements", systemImage: "calendar.badge.plus") }
                 NavigationLink { SansEcoleView() } label: { Label("Journées sans école", systemImage: "sun.max") }
                 NavigationLink { ImportView() } label: { Label("Importer un document", systemImage: "doc.viewfinder") }

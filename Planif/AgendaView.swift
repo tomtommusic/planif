@@ -10,6 +10,7 @@ struct AgendaView: View {
     @State private var date = D.today()
     @State private var cours: CleId?
     @State private var evenement: Evenement?
+    @State private var occurrence: Evenement?
     @State private var nouvelEvenement = false
     @State private var choixDate = false
     @State private var jourCycle: CleId?
@@ -60,6 +61,7 @@ struct AgendaView: View {
             }
             .sheet(item: $cours) { CoursSheet(cle: $0.id) }
             .sheet(item: $evenement) { EvenementEditeur(original: $0) }
+            .sheet(item: $occurrence) { OccurrenceSheet(occ: $0) }
             .sheet(isPresented: $nouvelEvenement) { EvenementEditeur(original: Evenement(titre: "", date: date)) }
             .sheet(isPresented: $choixDate) { ChoixDateSheet(date: $date) }
             .sheet(item: $jourCycle) { JourCycleSheet(date: $0.id) }
@@ -84,7 +86,8 @@ struct AgendaView: View {
     private func ouvrir(_ x: ItemJour) {
         switch x.type {
         case .cours: cours = CleId(id: x.cle)
-        case .evenement: evenement = x.evenement
+        case .evenement:
+            if x.evenement?.horaireId != nil { occurrence = x.evenement } else { evenement = x.evenement }
         case .libre: break
         }
     }

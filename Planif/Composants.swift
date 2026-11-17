@@ -85,7 +85,7 @@ struct LigneItem: View {
         switch item.type {
         case .cours: return item.groupe?.icone ?? "person.2"
         case .libre: return "cup.and.saucer"
-        case .evenement: return item.evenement?.type.symbole ?? "calendar"
+        case .evenement: return item.evenement?.horaireId != nil ? "repeat" : (item.evenement?.type.symbole ?? "calendar")
         }
     }
     private var titre: String {
@@ -113,7 +113,7 @@ struct LigneItem: View {
         case .evenement:
             guard let e = item.evenement else { return "" }
             let h = e.journee ? "Toute la journée" : D.hm(e.debut) + (e.fin.isEmpty ? "" : "–" + D.hm(e.fin))
-            return h + " · " + e.type.label + (e.lieu.isEmpty ? "" : " · " + e.lieu)
+            return h + " · " + (e.horaireId != nil ? e.note : e.type.label) + (e.lieu.isEmpty ? "" : " · " + e.lieu)
         }
     }
     private var fond: Color {

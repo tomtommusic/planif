@@ -186,7 +186,9 @@ struct VuePlanifWidget: View {
             if x.annule { return "Cours annulé" }
             if let pt = m.texte(x.place) { return pt.titre + " · " + pt.cours }
             return x.periode?.nom
-        case .evenement: return x.evenement?.type.label
+        case .evenement:
+            guard let e = x.evenement else { return nil }
+            return e.horaireId != nil ? e.note : e.type.label
         case .libre: return x.periode?.nom
         }
     }
