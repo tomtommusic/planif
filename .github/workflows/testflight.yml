@@ -10,11 +10,11 @@ on:
         required: false
         default: ""
       signature:
-        description: "Archive : adhoc (garde les droits App Group) ou aucune"
+        description: "Signature de l'archive : auto (signée avec la clé API, garde l'App Group) ou aucune"
         required: false
-        default: adhoc
+        default: auto
         type: choice
-        options: [adhoc, aucune]
+        options: [auto, aucune]
       runner:
         description: "Mac de GitHub (changer si l'envoi reste en file d'attente)"
         required: false
@@ -52,8 +52,8 @@ jobs:
           if [ "${{ github.event.inputs.signature }}" = aucune ]; then
             SIGN='CODE_SIGN_STYLE=Automatic CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='
           else
-            # Signature ad hoc qui porte les droits (App Group) ; la vraie signature se fait à l'envoi.
-            SIGN='CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES'
+            # Signature automatique : Xcode crée certificat et profils avec la clé API ; les droits (App Group) sont conservés.
+            SIGN='CODE_SIGN_STYLE=Automatic'
           fi
           V="${{ github.event.inputs.version }}"; EXTRA=""; [ -n "$V" ] && EXTRA="MARKETING_VERSION=$V"
           xcodebuild -project Planif.xcodeproj -scheme Planif -configuration Release \
