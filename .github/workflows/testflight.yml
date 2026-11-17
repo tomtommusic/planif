@@ -10,11 +10,11 @@ on:
         required: false
         default: ""
       signature:
-        description: "Signature de l'archive : auto (signée avec la clé API, garde l'App Group) ou aucune"
+        description: "Signature : manuelle (certificat temporaire, garde l'App Group) ou aucune"
         required: false
-        default: auto
+        default: manuelle
         type: choice
-        options: [auto, aucune]
+        options: [manuelle, aucune]
       runner:
         description: "Mac de GitHub (changer si l'envoi reste en file d'attente)"
         required: false
@@ -46,25 +46,36 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/keys"; KEY="$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
           printf '%s\n' "$ASC_KEY_P8" > "$KEY"; chmod 600 "$KEY"; echo "KEY=$KEY" >> "$GITHUB_ENV"
+      - name: Préparer la signature (certificat et profils temporaires)
+        if: ${{ github.event.inputs.signature != 'aucune' }}
+        run: |
+          python3 -m pip install --quiet --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install --quiet pyjwt cryptography
+          python3 ci/signature.py preparer 2>&1 | tee -a tf.log
       - name: Archiver
         run: |
           set -o pipefail
           if [ "${{ github.event.inputs.signature }}" = aucune ]; then
             SIGN='CODE_SIGN_STYLE=Automatic CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='
           else
-            # Signature automatique : Xcode crée certificat et profils avec la clé API ; les droits (App Group) sont conservés.
-            SIGN='CODE_SIGN_STYLE=Automatic'
+            SIGN="OTHER_CODE_SIGN_FLAGS=--keychain=$RUNNER_TEMP/ci.keychain-db"
           fi
           V="${{ github.event.inputs.version }}"; EXTRA=""; [ -n "$V" ] && EXTRA="MARKETING_VERSION=$V"
           xcodebuild -project Planif.xcodeproj -scheme Planif -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Planif.xcarchive" \
-            -allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" $SIGN CURRENT_PROJECT_VERSION="${{ github.run_number }}" $EXTRA \
+            $SIGN CURRENT_PROJECT_VERSION="${{ github.run_number }}" $EXTRA \
             archive > archive.log 2>&1 || { grep -E "error:|error -|No Account|No profiles|Provisioning|requires a provisioning|Signing" archive.log | sort -u | head -25 | tee -a tf.log | while IFS= read -r l; do echo "::error::$l"; done; tail -40 archive.log >> tf.log; exit 1; }
           echo "ARCHIVE: OK" >> tf.log
-      - name: Envoyer à App Store Connect (TestFlight)
+      - name: Exporter, vérifier et envoyer à TestFlight
         run: |
           set -o pipefail
+          if [ "${{ github.event.inputs.signature }}" = aucune ]; then
+            PROFILS="<key>signingStyle</key><string>automatic</string>"
+          else
+            PROFILS=$(python3 -c "
+          import json,os
+          p=json.load(open(os.environ['RUNNER_TEMP']+'/profils.json'))
+          print('<key>signingStyle</key><string>manual</string><key>signingCertificate</key><string>Apple Distribution</string><key>provisioningProfiles</key><dict>'+''.join('<key>%s</key><string>%s</string>'%(k,v) for k,v in p.items())+'</dict>')")
+          fi
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -72,7 +83,7 @@ jobs:
             <key>method</key><string>app-store-connect</string>
             <key>destination</key><string>export</string>
             <key>teamID</key><string>$APPLE_TEAM_ID</string>
-            <key>signingStyle</key><string>automatic</string>
+            $PROFILS
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           PLIST
@@ -80,13 +91,12 @@ jobs:
             -exportPath "$RUNNER_TEMP/out" -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" > export.log 2>&1 || { grep -E "error|Error|ERROR" export.log | sort -u | head -25 | tee -a tf.log | while IFS= read -r l; do echo "::error::$l"; done; tail -40 export.log >> tf.log; exit 1; }
           echo "EXPORT: OK" >> tf.log
-          # Vérifier que l'app et le widget portent bien le groupe d'apps (sinon le widget ne verrait pas les données)
           IPA=$(ls "$RUNNER_TEMP/out"/*.ipa | head -1); rm -rf "$RUNNER_TEMP/x"; mkdir "$RUNNER_TEMP/x"; unzip -q "$IPA" -d "$RUNNER_TEMP/x"
           for B in "$RUNNER_TEMP/x/Payload/Planif.app" "$RUNNER_TEMP/x/Payload/Planif.app/PlugIns/PlanifWidgetExtension.appex"; do
             echo "--- droits de $(basename "$B") ---" >> tf.log
             codesign -d --entitlements - --xml "$B" 2>/dev/null | plutil -convert xml1 -o - - 2>/dev/null >> tf.log || codesign -d --entitlements - "$B" >> tf.log 2>&1
           done
-          grep -q "group.ca.tomtommusic.planif" tf.log || { echo "::error::Le groupe d'apps est absent de la signature : relancer avec une autre option de signature"; echo "DROITS: GROUPE ABSENT" >> tf.log; exit 1; }
+          [ $(grep -c "group.ca.tomtommusic.planif" tf.log) -ge 2 ] || { echo "::error::Le groupe d'apps est absent de la signature"; echo "DROITS: GROUPE ABSENT" >> tf.log; exit 1; }
           echo "DROITS: OK" >> tf.log
           xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" > upload.log 2>&1 \
             || { grep -iE "error|fail" upload.log | head -20 | tee -a tf.log | while IFS= read -r l; do echo "::error::$l"; done; tail -30 upload.log >> tf.log; exit 1; }
@@ -94,6 +104,11 @@ jobs:
           echo "ENVOI: OK — build ${{ github.run_number }}. Elle apparaîtra dans TestFlight après le traitement par Apple (10 à 30 min)." | tee -a tf.log
         env:
           API_PRIVATE_KEYS_DIR: ${{ runner.temp }}/keys
+      - name: Révoquer le certificat temporaire
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/signature.json" ] && python3 ci/signature.py nettoyer 2>&1 | tee -a tf.log || true
+          security delete-keychain "$RUNNER_TEMP/ci.keychain-db" 2>/dev/null || true
       - name: Effacer la clé
         if: always()
         run: rm -rf "$RUNNER_TEMP/keys"
