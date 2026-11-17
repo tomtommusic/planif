@@ -29,18 +29,27 @@ def jeton():
                       cle, algorithm="ES256", headers={"kid": os.environ["ASC_KEY_ID"], "typ": "JWT"})
 
 
-def api(methode, chemin, corps=None):
+def api(methode, chemin, corps=None, essais=5):
+    for n in range(essais):
+        try:
+            return _api(methode, chemin, corps)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode(errors="replace")
+            if e.code >= 500 and n < essais - 1:
+                print(f"App Store Connect {methode} {chemin} -> {e.code}, nouvel essai dans {20 * (n + 1)} s")
+                time.sleep(20 * (n + 1))
+                continue
+            print(f"::error::App Store Connect {methode} {chemin} -> {e.code} : {detail[:600]}")
+            raise SystemExit(1)
+
+
+def _api(methode, chemin, corps=None):
     req = urllib.request.Request(API + chemin, method=methode,
                                  data=json.dumps(corps).encode() if corps is not None else None,
                                  headers={"Authorization": "Bearer " + jeton(), "Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req) as r:
-            t = r.read()
-            return json.loads(t) if t else {}
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode(errors="replace")
-        print(f"::error::App Store Connect {methode} {chemin} -> {e.code} : {detail[:600]}")
-        raise SystemExit(1)
+    with urllib.request.urlopen(req) as r:
+        t = r.read()
+        return json.loads(t) if t else {}
 
 
 def sh(*cmd):
@@ -49,6 +58,8 @@ def sh(*cmd):
 
 def preparer():
     etat = {"profils": [], "certificat": None}
+    existants = api("GET", "/certificates?limit=200").get("data", [])
+    print("Certificats existants :", [(c["attributes"].get("certificateType"), c["attributes"].get("name"), c["attributes"].get("expirationDate", "")[:10]) for c in existants])
     # 1. Certificat de distribution temporaire
     cle = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     csr = x509.CertificateSigningRequestBuilder().subject_name(
