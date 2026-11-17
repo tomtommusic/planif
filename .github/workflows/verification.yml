@@ -24,6 +24,11 @@ jobs:
             -destination 'generic/platform=iOS Simulator' -derivedDataPath "$PWD/dd" CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
             && echo "RESULTAT: OK" >> ci.log || { echo "RESULTAT: ECHEC" >> ci.log; grep -E "error:" build.log | sort -u | head -80 >> ci.log; tail -40 build.log >> ci.log; exit 1; }
           grep -E "warning:" build.log | sort -u | head -40 >> ci.log || true
+      - name: Tester la lecture d'un calendrier en grille
+        run: |
+          set -o pipefail
+          xcrun swiftc -O Shared/Model.swift Shared/Moteur.swift Planif/GrilleCalendrier.swift ci/test_grille.swift -o /tmp/test_grille > tg.log 2>&1 && /tmp/test_grille >> tg.log 2>&1; r=$?
+          echo "--- test grille ---" >> ci.log; cat tg.log >> ci.log; exit $r
       - name: Lancer dans le simulateur et prendre une capture
         continue-on-error: true
         run: |

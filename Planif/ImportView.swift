@@ -28,6 +28,10 @@ struct ImportView: View {
     @State private var resultats: [Detecte] = []
     @State private var methode = ""
     @State private var message: String?
+    @State private var grille: ResultatGrille?
+    @State private var gCycle = true
+    @State private var gSansEcole = true
+    @State private var gAnnee = true
 
     var body: some View {
         Form {
@@ -43,6 +47,7 @@ struct ImportView: View {
                 Section { HStack { ProgressView(); Text(etat).padding(.leading, 8) } }
             }
             if let message { Section { Text(message) } }
+            if let g = grille { sectionGrille(g) }
             if !resultats.isEmpty {
                 Section {
                     ForEach($resultats) { $r in
@@ -105,6 +110,16 @@ struct ImportView: View {
             fin("Impossible d’ouvrir ce PDF.")
             return
         }
+        etat = "Recherche d’un calendrier en grille…"
+        var g = ResultatGrille()
+        for i in 0..<doc.pageCount {
+            if let page = doc.page(at: i) { g.fusionner(GrilleCalendrier.analyser(page)) }
+        }
+        if g.cycle.count >= 20 {
+            grille = g
+            fin(nil)
+            return
+        }
         var texte = doc.string ?? ""
         if texte.trimmingCharacters(in: .whitespacesAndNewlines).count < 40 {
             etat = "PDF numérisé : lecture des pages…"
@@ -159,7 +174,66 @@ struct ImportView: View {
         resultats = []
     }
 
-    private func debut(_ t: String) { occupe = true; etat = t; message = nil; resultats = [] }
+    @ViewBuilder private func sectionGrille(_ g: ResultatGrille) -> some View {
+        Section {
+            Label("Calendrier scolaire en grille détecté", systemImage: "calendar").font(.headline)
+            if let a = g.premier, let z = g.dernier {
+                Text("\(g.cycle.count) jours de classe avec leur jour de cycle, du \(D.court(a).lowercased()) au \(D.court(z).lowercased()).")
+            }
+            Text("\(g.nbPedago) journée(s) pédagogique(s) et \(g.nbConge) journée(s) de congé" + (g.reprises.isEmpty ? "." : ", dont \(g.reprises.count) journée(s) de reprise possible."))
+                .font(.subheadline)
+            Toggle("Jours de cycle exacts pour toute l’année", isOn: $gCycle)
+            Toggle("Ajouter les journées sans école à l’agenda", isOn: $gSansEcole)
+            Toggle("Régler l’année scolaire sur ces dates", isOn: $gAnnee)
+            Button("Appliquer") { appliquerGrille(g) }.bold()
+        } footer: {
+            Text("Les jours de cycle viennent des petits chiffres sous chaque date. Les pédagos et les congés viennent de la couleur des cases (bleu et vert).")
+        }
+    }
+
+    private func appliquerGrille(_ g: ResultatGrille) {
+        store.maj { d in
+            if gCycle {
+                for (date, j) in g.cycle { d.config.cycleMap[date] = j }
+                for date in g.sansEcole.keys where date > (g.premier ?? "") && date < (g.dernier ?? "") { d.config.cycleMap[date] = 0 }
+            }
+            if gAnnee, let a = g.premier, let z = g.dernier {
+                d.config.debut = a
+                d.config.fin = z
+                d.config.refDate = a
+                d.config.refJour = g.cycle[a] ?? 1
+                d.config.hebdo = false
+                let maxJour = g.cycle.values.max() ?? d.config.cycleLen
+                if maxJour >= 2 { d.config.cycleLen = maxJour }
+            }
+            if gSansEcole {
+                // Regroupe les journées qui se suivent (ex. congé des Fêtes) en un seul événement
+                let dates = g.sansEcole.keys.sorted()
+                var i = 0
+                while i < dates.count {
+                    let debut = dates[i], type = g.sansEcole[debut] ?? .pedago, reprise = g.reprises.contains(debut)
+                    var fin = debut
+                    var j = i + 1
+                    while j < dates.count, g.sansEcole[dates[j]] == type, g.reprises.contains(dates[j]) == reprise, prochainJourSemaine(fin) == dates[j] {
+                        fin = dates[j]; j += 1
+                    }
+                    let titre = reprise ? "Journée pédagogique (reprise possible)" : (type == .conge ? "Congé" : "Journée pédagogique")
+                    _ = store.ajouterSansEcole(titre, date: debut, fin: fin == debut ? "" : fin, type: type, dans: &d)
+                    i = j
+                }
+            }
+        }
+        message = "Calendrier appliqué : les jours de cycle sont maintenant ceux de ton école."
+        grille = nil
+    }
+
+    private func prochainJourSemaine(_ date: String) -> String {
+        var x = D.add(date, 1)
+        while D.weekday(x) == 0 || D.weekday(x) == 6 { x = D.add(x, 1) }
+        return x
+    }
+
+    private func debut(_ t: String) { occupe = true; etat = t; message = nil; resultats = []; grille = nil }
     private func fin(_ m: String?) { occupe = false; message = m }
 }
 
