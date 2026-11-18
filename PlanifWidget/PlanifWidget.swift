@@ -126,7 +126,8 @@ struct VuePlanifWidget: View {
         let h = dec == 0 ? D.hhmm(entree.date) : "00:00"
         let tous = m.items(jour).filter { !$0.debut.isEmpty }
         let actifs = tous.filter { $0.type != .libre }
-        let cur = actifs.first { $0.debut <= h && h < $0.fin }
+        // En cours : un cours ou un événement, sinon la période libre (ex. : l'heure du dîner).
+        let cur = actifs.first { $0.debut <= h && h < $0.fin } ?? tous.first { $0.type == .libre && $0.debut <= h && h < $0.fin }
         let suivants = actifs.filter { $0.debut > h }
         let focus = cur ?? suivants.first
         let cd = m.jourCycle(jour)
