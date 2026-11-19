@@ -13,7 +13,6 @@ struct AccueilView: View {
     @State private var aAnnuler: ItemJour?
     @State private var ajout: Ajout?
     @State private var reglages = false
-    @State private var importer = false
     @State private var occurrence: Evenement?
     @State private var evenement: Evenement?
 
@@ -90,7 +89,6 @@ struct AccueilView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $reglages) { ReglagesView() }
-            .navigationDestination(isPresented: $importer) { ImportView() }
             .sheet(item: $cours) { CoursSheet(cle: $0.id) }
             .sheet(item: $occurrence) { OccurrenceSheet(occ: $0) }
             .sheet(item: $evenement) { EvenementEditeur(original: $0) }
@@ -133,7 +131,6 @@ struct AccueilView: View {
                 Button { ajout = .pratique } label: { Label("Pratique régulière", systemImage: "repeat") }
                 Button { ajout = .activite } label: { Label("Activité", systemImage: "square.stack.3d.up") }
                 Button { ajout = .groupe } label: { Label("Groupe", systemImage: "person.2") }
-                Button { importer = true } label: { Label("Importer un document", systemImage: "doc.viewfinder") }
             } label: {
                 rond("plus")
             }

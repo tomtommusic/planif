@@ -46,6 +46,13 @@ struct CalendrierView: View {
 
                     legende
 
+                    NavigationLink { ImportView() } label: {
+                        Label("Importer un document (calendrier, comités, événements)", systemImage: "doc.viewfinder")
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered).tint(Theme.vert)
+
                     let marquants = joursMarquants(m)
                     if !marquants.isEmpty {
                         Text("CE MOIS-CI").font(.caption.weight(.heavy)).foregroundStyle(.secondary).padding(.horizontal, 4)
@@ -74,6 +81,10 @@ struct CalendrierView: View {
             .navigationBarTitleDisplayMode(.inline)
             .barreVerte()
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink { ImportView() } label: { Label("Importer", systemImage: "square.and.arrow.down") }
+                        .accessibilityLabel("Importer un document")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Aujourd’hui") { mois = D.premierDuMois(D.today()) }
                 }
