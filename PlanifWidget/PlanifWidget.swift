@@ -228,26 +228,37 @@ struct VuePlanifWidget: View {
                 }
             }
         default:
+            // Même présentation que le petit widget de l'écran d'accueil, en format compact.
+            let focus = cur ?? suivant
+            let etiquette = cd.map { m.etiquetteJour($0) } ?? ""
             VStack(alignment: .leading, spacing: 1) {
-                if let x = cur {
-                    Text("EN CE MOMENT · fin \(D.hm(x.fin))").font(.caption2.weight(.heavy))
-                    Text(nom(x)).font(.headline).lineLimit(1)
-                    if let n = suivant {
-                        Text("Ensuite \(D.hm(n.debut)) · \(nom(n))").font(.caption).lineLimit(1)
-                    } else if let s = sousTexte(x, m) {
-                        Text(s).font(.caption).lineLimit(1)
+                if let x = focus {
+                    Text((cur != nil ? "EN CE MOMENT" : "PROCHAIN · " + D.hm(x.debut)) + (etiquette.isEmpty ? "" : " · " + etiquette))
+                        .font(.caption2.weight(.heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                    HStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 1.5).frame(width: 3, height: 15)
+                        Text(nom(x)).font(.headline).lineLimit(1).minimumScaleFactor(0.7)
                     }
-                } else if let x = suivant {
-                    Text("PROCHAIN · \(D.hm(x.debut))").font(.caption2.weight(.heavy))
-                    Text(nom(x)).font(.headline).lineLimit(1)
-                    if let s = sousTexte(x, m) { Text(s).font(.caption).lineLimit(1) }
+                    if let s = sousTexte(x, m) {
+                        Text(s).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    if cur != nil, !x.fin.isEmpty {
+                        let total = Double(max(1, D.minutes(x.fin) - D.minutes(x.debut)))
+                        let fait = Double(max(0, D.minutes(h) - D.minutes(x.debut)))
+                        HStack(spacing: 4) {
+                            ProgressView(value: min(fait, total), total: total).progressViewStyle(.linear)
+                            Text("fin " + D.hm(x.fin)).font(.caption2.monospacedDigit())
+                        }
+                    } else if let n = suivant, n.id != x.id {
+                        Text("Ensuite \(D.hm(n.debut)) · \(nom(n))").font(.caption2).lineLimit(1)
+                    }
                 } else {
                     Text(cd.map { m.etiquetteJour($0).uppercased() } ?? "AUJOURD’HUI").font(.caption2.weight(.heavy))
                     Text(cd == nil ? "Pas d’école" : "Journée terminée").font(.headline)
-                    if let n = m.prochainJourEcole(apres: jour) { Text("Retour " + D.court(n).lowercased()).font(.caption) }
+                    if let n = m.prochainJourEcole(apres: jour) { Text("Retour " + D.court(n).lowercased()).font(.caption2) }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .widgetAccentable()
         }
     }
