@@ -60,10 +60,10 @@ struct RacineView: View {
             AssistantView()
         } else {
             TabView {
-                Tab("Accueil", systemImage: "house") { AccueilView() }
-                Tab("Agenda", systemImage: "calendar") { AgendaView() }
+                Tab("Aujourd’hui", systemImage: "sun.max") { AccueilView() }
+                Tab("Agenda", systemImage: "list.bullet.rectangle") { AgendaView() }
+                Tab("Calendrier", systemImage: "calendar") { CalendrierView() }
                 Tab("Groupes", systemImage: "person.2") { GroupesView() }
-                Tab("Activités", systemImage: "square.stack.3d.up") { ActivitesView() }
                 Tab("Plus", systemImage: "ellipsis") { PlusView() }
             }
         }

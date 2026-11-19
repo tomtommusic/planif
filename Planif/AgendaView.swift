@@ -206,13 +206,28 @@ struct CoursSheet: View {
                             }
                         }
                     }
-                    Section("Note") {
+                    if let r = m.rappel(cle) {
+                        Section {
+                            Text(r.note)
+                            Button("C’est fait") {
+                                store.maj { d in if !d.notesFaites.contains(r.cle) { d.notesFaites.append(r.cle) } }
+                            }
+                        } header: {
+                            Label("Note du cours précédent (\(D.court(r.date).lowercased()))", systemImage: "note.text")
+                        }
+                    }
+                    Section {
                         TextEditor(text: $note).frame(minHeight: 110)
                         Button("Enregistrer la note") {
                             let t = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                            store.maj { d in d.notes[cle] = t.isEmpty ? nil : t }
+                            store.maj { d in
+                                d.notes[cle] = t.isEmpty ? nil : t
+                                d.notesFaites.removeAll { $0 == cle }
+                            }
                             dismiss()
                         }
+                    } header: { Text("Note pour ce cours") } footer: {
+                        Text("Elle te sera rappelée au prochain cours de ce groupe, dans l’app et sur le widget.")
                     }
                 } else {
                     Text("Ce cours n’existe plus.")

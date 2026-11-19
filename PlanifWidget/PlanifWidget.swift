@@ -307,6 +307,9 @@ struct VuePlanifWidget: View {
                     Text(nom(x)).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 if let s = sousTexte(x, m) { Text(s).font(.caption).lineLimit(2) }
+                if !x.rappel.isEmpty {
+                    Label(x.rappel, systemImage: "note.text").font(.caption.bold()).lineLimit(1)
+                }
                 Spacer(minLength: 0)
                 if enCours, !x.fin.isEmpty {
                     let total = Double(max(1, D.minutes(x.fin) - D.minutes(x.debut)))

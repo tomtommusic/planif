@@ -161,6 +161,12 @@ struct AppData: Codable {
     var annulations: [String]           // clés "idGroupe|date|idPeriode"
     var notes: [String: String]         // même clé
     var horairesSup: [HoraireSup]? = nil
+    var notesFaitesOpt: [String]? = nil  // notes dont le rappel a été coché « C'est fait »
+
+    var notesFaites: [String] {
+        get { notesFaitesOpt ?? [] }
+        set { notesFaitesOpt = newValue }
+    }
 
     var horaires: [HoraireSup] {
         get { horairesSup ?? [] }

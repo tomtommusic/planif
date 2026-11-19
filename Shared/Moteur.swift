@@ -37,6 +37,12 @@ enum D {
         return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
     }
 
+    static func premierDuMois(_ s: String) -> String { String(s.prefix(8)) + "01" }
+
+    static func moisDecale(_ s: String, _ n: Int) -> String {
+        iso(cal.date(byAdding: .month, value: n, to: date(premierDuMois(s))) ?? Date()).prefix(8) + "01"
+    }
+
     static func monday(_ s: String) -> String { add(s, -((weekday(s) + 6) % 7)) }
 
     static func minutes(_ t: String) -> Int {
@@ -123,6 +129,8 @@ struct ItemJour: Identifiable {
     var place: Place? = nil
     var note: String = ""
     var evenement: Evenement? = nil
+    /// Note laissée au cours précédent du même groupe, à ne pas oublier.
+    var rappel: String = ""
 }
 
 // MARK: - Moteur : cycle, événements, planification
@@ -292,6 +300,24 @@ final class Moteur {
 
     static func cle(_ gid: String, _ date: String, _ pid: String) -> String { "\(gid)|\(date)|\(pid)" }
 
+    /// Note du cours précédent du même groupe (en sautant les cours annulés), si elle n'est pas cochée « faite ».
+    func rappel(_ cle: String) -> (cle: String, date: String, note: String)? {
+        let p = cle.split(separator: "|").map(String.init)
+        guard p.count == 3, let pl = plagesParGroupe[p[0]],
+              let i = pl.firstIndex(where: { $0.date == p[1] && $0.pid == p[2] }) else { return nil }
+        let annul = Set(d.annulations)
+        var j = i - 1
+        while j >= 0 {
+            let k = Moteur.cle(p[0], pl[j].date, pl[j].pid)
+            if let n = d.notes[k], !n.isEmpty {
+                return d.notesFaites.contains(k) ? nil : (k, pl[j].date, n)
+            }
+            if !annul.contains(k) && !coursAnnulesLe(pl[j].date) { return nil }
+            j -= 1
+        }
+        return nil
+    }
+
     // MARK: Planification : les activités coulent dans les périodes, dans l'ordre de la liste
 
     func sequence(_ a: Activite) -> [(si: Int, sk: Int, sn: Int)] {
@@ -364,7 +390,8 @@ final class Moteur {
                     out.append(ItemJour(id: k, type: .cours, debut: p.debut, fin: p.fin, periode: p, groupe: g,
                                         local: c.local.isEmpty ? g.local : c.local, cle: k,
                                         annule: annul.contains(k) || annulJour, annuleParEvenement: annulJour,
-                                        place: plan.places[k], note: d.notes[k] ?? ""))
+                                        place: plan.places[k], note: d.notes[k] ?? "",
+                                        rappel: rappel(k)?.note ?? ""))
                 } else {
                     out.append(ItemJour(id: "f" + date + p.id, type: .libre, debut: p.debut, fin: p.fin, periode: p))
                 }

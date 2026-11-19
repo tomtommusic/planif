@@ -4,6 +4,7 @@ struct PlusView: View {
     var body: some View {
         NavigationStack {
             List {
+                NavigationLink { ActivitesView(dansPile: false) } label: { Label("Activités (planification)", systemImage: "square.stack.3d.up") }
                 NavigationLink { GrilleView() } label: { Label("Horaire (grille du cycle)", systemImage: "square.grid.3x3") }
                 NavigationLink { HorairesView() } label: { Label("Horaires réguliers (pratiques, soirées…)", systemImage: "repeat") }
                 NavigationLink { EvenementsView() } label: { Label("Événements", systemImage: "calendar.badge.plus") }

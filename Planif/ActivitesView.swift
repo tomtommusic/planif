@@ -4,9 +4,14 @@ struct ActivitesView: View {
     @EnvironmentObject var store: Store
     @State private var nouvelle = false
     @State private var filtre = ""
+    var dansPile = true
 
     var body: some View {
-        NavigationStack {
+        if dansPile { NavigationStack { contenu } } else { contenu }
+    }
+
+    @ViewBuilder private var contenu: some View {
+        Group {
             let m = store.moteur
             let liste = store.data.activites.filter { filtre.isEmpty || $0.groupes.contains(filtre) }
             List {
