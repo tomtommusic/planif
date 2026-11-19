@@ -98,7 +98,7 @@ struct PlanifWidget: Widget {
         }
         .configurationDisplayName("Planif")
         .description("La période en cours, ce qui est planifié et la suite de ta journée.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryInline, .accessoryCircular])
     }
 }
 
@@ -108,7 +108,12 @@ struct VuePlanifWidget: View {
     let entree: EntreePlanif
 
     var body: some View {
-        if let data = entree.data, data.config.onboarded {
+        if let data = entree.data, data.config.onboarded,
+           [.accessoryRectangular, .accessoryInline, .accessoryCircular].contains(famille) {
+            accessoire(Moteur(data))
+        } else if [.accessoryRectangular, .accessoryInline, .accessoryCircular].contains(famille) {
+            Text("Planif")
+        } else if let data = entree.data, data.config.onboarded {
             contenu(Moteur(data))
         } else {
             VStack(alignment: .leading, spacing: 6) {
@@ -180,6 +185,70 @@ struct VuePlanifWidget: View {
                 }
                 Spacer(minLength: 0)
             }
+        }
+    }
+
+    // MARK: Écran verrouillé (sous l'heure)
+
+    @ViewBuilder private func accessoire(_ m: Moteur) -> some View {
+        let jour = D.iso(entree.date)
+        let h = D.hhmm(entree.date)
+        let tous = m.items(jour).filter { !$0.debut.isEmpty }
+        let actifs = tous.filter { $0.type != .libre }
+        let cur = actifs.first { $0.debut <= h && h < $0.fin } ?? tous.first { $0.type == .libre && $0.debut <= h && h < $0.fin }
+        let suivant = actifs.first { $0.debut > h }
+        let cd = m.jourCycle(jour)
+
+        switch famille {
+        case .accessoryInline:
+            if let x = cur {
+                Text("\(nom(x)) · jusqu’à \(D.hm(x.fin))")
+            } else if let x = suivant {
+                Text("Ensuite \(D.hm(x.debut)) · \(nom(x))")
+            } else {
+                Text(cd.map { m.etiquetteJour($0) + " · journée terminée" } ?? "Pas d’école")
+            }
+        case .accessoryCircular:
+            ZStack {
+                AccessoryWidgetBackground()
+                if let x = cur, !x.fin.isEmpty {
+                    let total = Double(max(1, D.minutes(x.fin) - D.minutes(x.debut)))
+                    let fait = Double(max(0, D.minutes(h) - D.minutes(x.debut)))
+                    Gauge(value: min(fait, total), in: 0...total) {
+                        Text(cd.map { "J\($0)" } ?? "")
+                    } currentValueLabel: {
+                        Text(x.type == .libre ? "libre" : nom(x)).minimumScaleFactor(0.5)
+                    }
+                    .gaugeStyle(.accessoryCircularCapacity)
+                } else {
+                    VStack(spacing: 0) {
+                        Text("Jour").font(.caption2)
+                        Text(cd.map { "\($0)" } ?? "—").font(.title2.bold())
+                    }
+                }
+            }
+        default:
+            VStack(alignment: .leading, spacing: 1) {
+                if let x = cur {
+                    Text("EN CE MOMENT · fin \(D.hm(x.fin))").font(.caption2.weight(.heavy))
+                    Text(nom(x)).font(.headline).lineLimit(1)
+                    if let n = suivant {
+                        Text("Ensuite \(D.hm(n.debut)) · \(nom(n))").font(.caption).lineLimit(1)
+                    } else if let s = sousTexte(x, m) {
+                        Text(s).font(.caption).lineLimit(1)
+                    }
+                } else if let x = suivant {
+                    Text("PROCHAIN · \(D.hm(x.debut))").font(.caption2.weight(.heavy))
+                    Text(nom(x)).font(.headline).lineLimit(1)
+                    if let s = sousTexte(x, m) { Text(s).font(.caption).lineLimit(1) }
+                } else {
+                    Text(cd.map { m.etiquetteJour($0).uppercased() } ?? "AUJOURD’HUI").font(.caption2.weight(.heavy))
+                    Text(cd == nil ? "Pas d’école" : "Journée terminée").font(.headline)
+                    if let n = m.prochainJourEcole(apres: jour) { Text("Retour " + D.court(n).lowercased()).font(.caption) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .widgetAccentable()
         }
     }
 
