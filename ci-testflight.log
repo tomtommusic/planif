@@ -1,0 +1,55 @@
+Xcode 26.3
+Build version 17C529
+Certificats existants : [('DEVELOPMENT', 'Apple Development: Created via API', '2027-10-26')]
+Certificat temporaire créé et installé.
+Profil créé pour ca.tomtommusic.planif (avec le groupe d'apps).
+Profil créé pour ca.tomtommusic.planif.widget (avec le groupe d'apps).
+Projet réglé en signature manuelle.
+ARCHIVE: OK
+EXPORT: OK
+--- droits de Planif.app ---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>application-identifier</key>
+	<string>NG7ZCLPNJM.ca.tomtommusic.planif</string>
+	<key>beta-reports-active</key>
+	<true/>
+	<key>com.apple.developer.team-identifier</key>
+	<string>NG7ZCLPNJM</string>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.ca.tomtommusic.planif</string>
+	</array>
+	<key>get-task-allow</key>
+	<false/>
+</dict>
+</plist>
+--- droits de PlanifWidgetExtension.appex ---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>application-identifier</key>
+	<string>NG7ZCLPNJM.ca.tomtommusic.planif.widget</string>
+	<key>beta-reports-active</key>
+	<true/>
+	<key>com.apple.developer.team-identifier</key>
+	<string>NG7ZCLPNJM</string>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.ca.tomtommusic.planif</string>
+	</array>
+	<key>get-task-allow</key>
+	<false/>
+</dict>
+</plist>
+DROITS: OK
+2026-11-25 12:28:03.533  WARN: [altool.600002D9C7C0] SDK version issue. This app was built with the iOS 26.2 SDK. Starting April 2027, iOS and iPadOS apps must be built with the iOS 27 SDK or later, included in Xcode 27 or later, in order to be uploaded to App Store Connect or submitted for distribution. (90725)
+   server_warning : 
+      code : 90725
+      description : SDK version issue. This app was built with the iOS 26.2 SDK. Starting April 2027, iOS and iPadOS apps must be built with the iOS 27 SDK or later, included in Xcode 27 or later, in order to be uploaded to App Store Connect or submitted for distribution.
+No errors, 1 warnings, uploading archive at '/Users/runner/work/_temp/out/Planif.ipa'.
+ENVOI: OK — build 18. Elle apparaîtra dans TestFlight après le traitement par Apple (10 à 30 min).
+Certificat temporaire révoqué.
