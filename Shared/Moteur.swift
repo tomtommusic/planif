@@ -115,6 +115,15 @@ struct PlanTexte {
 
 enum TypeItem { case cours, libre, evenement }
 
+extension Moteur {
+    /// Prochain élément après l'heure h : une période libre compte si un cours ou un événement vient après elle.
+    static func prochain(_ tous: [ItemJour], apres h: String) -> ItemJour? {
+        let actif = tous.first { $0.type != .libre && $0.debut > h }
+        if let a = actif, let l = tous.first(where: { $0.type == .libre && $0.debut > h }), l.debut < a.debut { return l }
+        return actif
+    }
+}
+
 struct ItemJour: Identifiable {
     let id: String
     let type: TypeItem

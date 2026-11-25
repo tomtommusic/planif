@@ -45,7 +45,7 @@ struct AccueilView: View {
                                 }
                             }
 
-                            heros(cur: cur, suivant: suite.first, m: m, date: date, h: h, cd: cd)
+                            heros(cur: cur, suivant: cur == nil ? Moteur.prochain(tous, apres: h) : suite.first, apres: suite.first, m: m, date: date, h: h, cd: cd)
 
                             ForEach(alertes(m), id: \.self) { a in
                                 HStack(alignment: .top, spacing: 10) {
@@ -68,7 +68,7 @@ struct AccueilView: View {
                                 .buttonStyle(.plain)
                             }
 
-                            let reste = cur == nil ? Array(suite.dropFirst()) : suite
+                            let reste = (cur == nil && Moteur.prochain(tous, apres: h)?.type != .libre) ? Array(suite.dropFirst()) : suite
                             if !reste.isEmpty {
                                 Text("ENSUITE").font(.caption.weight(.heavy)).foregroundStyle(.secondary).padding(.horizontal, 4)
                                 VStack(spacing: 0) {
@@ -154,7 +154,7 @@ struct AccueilView: View {
 
     // MARK: La grande carte
 
-    @ViewBuilder private func heros(cur: ItemJour?, suivant: ItemJour?, m: Moteur, date: String, h: String, cd: Int?) -> some View {
+    @ViewBuilder private func heros(cur: ItemJour?, suivant: ItemJour?, apres: ItemJour?, m: Moteur, date: String, h: String, cd: Int?) -> some View {
         let x = cur ?? suivant
         VStack(alignment: .leading, spacing: 10) {
             if let x {
@@ -164,7 +164,7 @@ struct AccueilView: View {
 
                 if x.type == .libre {
                     Text("Période libre").font(.system(size: 28, weight: .heavy))
-                    if let s = suivant { Text("Ensuite à \(D.hm(s.debut)) : \(nomItem(s))").font(.subheadline) }
+                    if let s = apres, s.id != x.id { Text("Ensuite à \(D.hm(s.debut)) : \(nomItem(s))").font(.subheadline) }
                 } else if x.type == .cours, let g = x.groupe {
                     HStack(spacing: 10) {
                         RoundedRectangle(cornerRadius: 3).fill(Theme.couleur(g.couleur).bande).frame(width: 6, height: 30)
